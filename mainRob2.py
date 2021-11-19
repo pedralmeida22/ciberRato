@@ -20,6 +20,7 @@ class MyRob(CRobLinkAngs):
     not_taken_positions = {}  # set com posicoes conhecidas nao visitadas
     path = []
     i_know_the_way = True if path != [] else False
+    mapa=dict()
 
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
@@ -325,65 +326,98 @@ class MyRob(CRobLinkAngs):
             if walls[0] == 0:
                 free_pos = (x + 2, y)
                 ways[0] = free_pos
+            else:
+                self.mapa[(x+1,y)]="|"
 
             if walls[1] == 0:
                 free_pos = (x, y + 2)
                 ways[1] = free_pos
+            else:
+                self.mapa[(x,y+1)]="-"
 
             if walls[2] == 0:
                 free_pos = (x, y - 2)
                 ways[2] = free_pos
+            else:
+                self.mapa[(x,y-1)]="-"
 
             if walls[3] == 0:
                 pass
+            else:
+                self.mapa[(x-1,y)]="|"
 
         elif self.orientation == 90:  # cima
             if walls[0] == 0:
                 free_pos = (x, y + 2)
                 ways[0] = free_pos
+            else:
+                self.mapa[(x,y+1)]="-"
 
             if walls[1] == 0:
                 free_pos = (x - 2, y)
                 ways[1] = free_pos
+            else:
+                self.mapa[(x-1,y)]="|"
+
 
             if walls[2] == 0:
                 free_pos = (x + 2, y)
                 ways[2] = free_pos
+            else:
+                self.mapa[(x+1,y)]="|"
 
             if walls[3] == 1:
                 pass
+            else:
+                self.mapa[(x,y-1)]="-"
 
         elif self.orientation == -90:  # baixo
             if walls[0] == 0:
                 free_pos = (x, y - 2)
                 ways[0] = free_pos
+            else:
+                self.mapa[(x,y-1)]="-"
 
             if walls[1] == 0:
                 free_pos = (x + 2, y)
                 ways[1] = free_pos
+            else:
+                self.mapa[(x+1,y)]="|"
 
             if walls[2] == 0:
                 free_pos = (x - 2, y)
                 ways[2] = free_pos
+            else:
+                self.mapa[(x-1,y)]="|"
 
             if walls[3] == 0:
                 pass
+            else:
+                self.mapa[(x,y+1)]="|"
 
         elif self.orientation == 180:  # esquerda
             if walls[0] == 0:
                 free_pos = (x - 2, y)
                 ways[0] = free_pos
+            else:
+                self.mapa[(x-1,y)]="|"
 
             if walls[1] == 0:
                 free_pos = (x, y - 2)
                 ways[1] = free_pos
+            else:
+                self.mapa[(x,y-1)]="-"
 
             if walls[2] == 0:
                 free_pos = (x, y + 2)
                 ways[2] = free_pos
+            else:
+                self.mapa[(x,y+1)]="-"
 
             if walls[3] == 0:
                 pass
+            else:
+                self.mapa[(x+1,y)]="|"
 
         return ways
 
