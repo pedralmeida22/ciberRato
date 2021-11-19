@@ -65,15 +65,23 @@ class MyRob(CRobLinkAngs):
                 print(f"\nPosition -> ({self.pos[0]},{self.pos[1]})")
 
                 if self.target != ():
-                    print(f"target -> ({self.target[0]},{self.target[1]})")
+                    print(f"next pos -> ({self.target[0]},{self.target[1]})")
 
                 print("orientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
 
-                # nao tem target, rip
+                # nao tem target, calcula
                 if self.target == ():
-                    print("No target!")
-                    state = "end"
+                    self.target = self.calc_next_pos(self.last_target)
+                    if self.target in self.visited_positions:
+                        print("\n\n I have been here already!!!\n\n")
+                        # calcular path
+                        # redirect to state "the-way"
+                        state = "end"
+
+                    if self.target is None:
+                        print("\n\nCould not calc target")
+                        state = "end"
 
                 # ainda nao chegou ao objetivo, anda
                 else:
@@ -89,11 +97,20 @@ class MyRob(CRobLinkAngs):
                     if self.has_reached_target(self.pos, self.target):
                         print("\n\n Cheguei ao target")
 
+                        # update not taken positions
                         for key, list in self.not_taken_positions.items():
                             for pos in list:
                                 if self.target == pos:
-                                    print("Removing pos from not taken: ", pos)
+                                    print("Removing pos: ", pos)
                                     self.not_taken_positions[key].remove(pos)
+
+                        to_remove = []
+                        for key, list in self.not_taken_positions.items():
+                            if not list:
+                                to_remove.append(key)
+
+                        for i in to_remove:
+                            self.not_taken_positions.pop(i)
 
                         self.last_target = self.target
                         state = "mapping"
@@ -142,7 +159,7 @@ class MyRob(CRobLinkAngs):
 
                     print("orientation target -> " + str(self.next_orientation))
 
-                elif self.next_orientation == self.direction():
+                elif self.next_orientation == self.direction():  # ver caso -180
                     state = "mapping"
                     self.next_orientation = None
                     self.orientation = self.direction()
@@ -156,29 +173,26 @@ class MyRob(CRobLinkAngs):
 
                     print('rotate_right function')
 
-            elif state == "mapping":
-                print("\n---MAPPING---")
-                self.driveMotors(0, 0)
-
-                target = self.calc_next_target()
-
-                if target is None:
-                    # a*
-                    pass
-                else:
-                    self.target = target
-
-                state = self.next_move(self.last_target, self.target)
-                print("next state: " + state)
-
             elif state == 'end':
                 self.driveMotors(0, 0)
                 print("state end")
 
+            elif state == "mapping":
+                print("\n---MAPPING---")
+                self.driveMotors(0, 0)
+                if self.target != ():
+                    self.visited_positions.add(self.target)  # adicionar
+                print(self.visited_positions)
+                self.target = ()  # reset target
+
+                # TODO mapping das paredes em redor
+
+                state = self.next_state()
+                print("next state: " + state)
+
             elif state == "the-way":
                 self.driveMotors(0, 0)
                 print("state the-way")
-
 
     def has_reached_target(self, pos, next_pos):
         if self.orientation == 0:
@@ -200,34 +214,21 @@ class MyRob(CRobLinkAngs):
         else:
             return False
 
-    def calc_next_target(self):
+    def calc_next_pos(self, previous_target):
+        if self.orientation == 0:
+            return (previous_target[0] + 2, previous_target[1])
 
-        x, y = self.last_target[0], self.last_target[1]
-        self.not_taken_positions.setdefault((x, y), set())
+        elif self.orientation == 180:
+            return (previous_target[0] - 2, previous_target[1])
 
-        # calcular target com base nos caminhos possiveis, guarda os caminhos possiveis nao escolhidos
-        temp = self.possible_targets(self.check_walls())
-        if temp[0] != () and temp[0] not in self.visited_positions:     # frente
-            target = temp[0]
+        elif self.orientation == 90:
+            return (previous_target[0], previous_target[1] + 2)
 
-            if temp[1] != () and temp[1] not in self.visited_positions:
-                self.not_taken_positions[(x, y)].add(temp[1])
+        elif self.orientation == -90:  # south
+            return (previous_target[0], previous_target[1] - 2)
 
-            if temp[2] != () and temp[2] not in self.visited_positions:
-                self.not_taken_positions[(x, y)].add(temp[2])
-
-        elif temp[1] != () and temp[1] not in self.visited_positions:   # esquerda
-            target = temp[1]
-
-            if temp[2] != () and temp[2] not in self.visited_positions:
-                self.not_taken_positions[(x, y)].add(temp[2])
-
-        elif temp[2] != () and temp[2] not in self.visited_positions:   # direita
-            target = temp[2]
-
-        print(f"\ntarget -> ({target[0]},{target[1]})")
-        print("\nNot taken: ", self.not_taken_positions)
-        return target
+        else:
+            return None  # se nao estiver alinhado com as 4 direcoes esperadas rip :/
 
     # ver direção do bicho para calcular next_pos
     def direction(self):
@@ -248,121 +249,133 @@ class MyRob(CRobLinkAngs):
         else:
             return bussola
 
-    def next_move(self, position, target):
-        # calcular next state com base no target
-        diff = position[0] - target[0], position[1] - target[1]
+    def next_state(self):
+        # TODO mais tarde -> guardar o caminho que estava livre e nao foi escolhido
+        walls = self.check_walls()
+        print("Walls: ", walls)
 
-        if self.orientation == 0:  # direita
-            if diff[0] == -2 and diff[1] == 0:
-                return "go_ahead"
+        # usar surroundings
+        self.surroundings(walls)
 
-            elif diff[0] == 0 and diff[1] == -2:
-                return "rotate_left"
-
-            elif diff[0] == 0 and diff[1] == 2:
-                return "rotate_right"
-
-        elif self.orientation == 90:  # cima
-            if diff[0] == -2 and diff[1] == 0:
-                return "rotate_right"
-
-            elif diff[0] == 0 and diff[1] == -2:
-                return "go_ahead"
-
-            elif diff[0] == 2 and diff[1] == 0:
-                return "rotate_left"
-
-        elif self.orientation == -90:  # baixo
-            if diff[0] == 0 and diff[1] == 2:
-                return "go_ahead"
-
-            elif diff[0] == 2 and diff[1] == 0:
-                return "rotate_right"
-
-            elif diff[0] == -2 and diff[1] == 0:
-                return "rotate_left"
-
-        elif self.orientation == 180:  # esquerda
-            if diff[0] == 2 and diff[1] == 0:
-                return "go_ahead"
-
-            elif diff[0] == 0 and diff[1] == 2:
-                return "rotate_left"
-
-            elif diff[0] == 0 and diff[1] == -2:
-                return "rotate_right"
-
-        return None
-
-    def possible_targets(self, walls):
-        x, y = self.last_target[0], self.last_target[1]
-        ways = [(), (), ()]
-
-        if self.orientation == 0:  # direita
-            if walls[0] == 0:
-                free_pos = (x + 2, y)
-                ways[0] = free_pos
-
+        if walls[0] == 0:
+            return "go_ahead"
+        else:
+            print('---Parede em frente, escolher lado---')
             if walls[1] == 0:
-                free_pos = (x, y + 2)
-                ways[1] = free_pos
+                return "rotate_left"
 
-            if walls[2] == 0:
-                free_pos = (x, y - 2)
-                ways[2] = free_pos
+            elif walls[2] == 0:
+                return "rotate_right"
 
-            if walls[3] == 0:
+            else:  # voltar para tras
+                return "rotate_left"
+
+    def surroundings(self, walls):  # preencher not taken e scan do mapa
+
+        x, y = self.last_target[0], self.last_target[1]
+        self.not_taken_positions.setdefault((x, y), [])
+
+        if self.orientation == 0:  # direita
+            if walls[0] == 1:
+                pass
+            else:
+                pos = (x + 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
+
+            if walls[1] == 1:
+                pass
+            else:
+                pos = (x, y + 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
+
+            if walls[2] == 1:
+                pass
+            else:
+                pos = (x, y - 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
+
+            if walls[3] == 1:
                 pass
 
         elif self.orientation == 90:  # cima
-            if walls[0] == 0:
-                free_pos = (x, y + 2)
-                ways[0] = free_pos
+            if walls[0] == 1:
+                pass
+            else:
+                pos = (x, y + 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[1] == 0:
-                free_pos = (x - 2, y)
-                ways[1] = free_pos
+            if walls[1] == 1:
+                pass
+            else:
+                pos = (x - 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[2] == 0:
-                free_pos = (x + 2, y)
-                ways[2] = free_pos
+            if walls[2] == 1:
+                pass
+            else:
+                pos = (x + 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
             if walls[3] == 1:
                 pass
 
         elif self.orientation == -90:  # baixo
-            if walls[0] == 0:
-                free_pos = (x, y - 2)
-                ways[0] = free_pos
+            if walls[0] == 1:
+                pass
+            else:
+                pos = (x, y - 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[1] == 0:
-                free_pos = (x + 2, y)
-                ways[1] = free_pos
+            if walls[1] == 1:
+                pass
+            else:
+                pos = (x + 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[2] == 0:
-                free_pos = (x - 2, y)
-                ways[2] = free_pos
+            if walls[2] == 1:
+                pass
+            else:
+                pos = (x - 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[3] == 0:
+            if walls[3] == 1:
                 pass
 
         elif self.orientation == 180:  # esquerda
-            if walls[0] == 0:
-                free_pos = (x - 2, y)
-                ways[0] = free_pos
+            if walls[0] == 1:
+                pass
+            else:
+                pos = (x - 2, y)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[1] == 0:
-                free_pos = (x, y - 2)
-                ways[1] = free_pos
+            if walls[1] == 1:
+                pass
+            else:
+                pos = (x, y - 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[2] == 0:
-                free_pos = (x, y + 2)
-                ways[2] = free_pos
+            if walls[2] == 1:
+                pass
+            else:
+                pos = (x, y + 2)
+                if pos not in self.visited_positions:
+                    self.not_taken_positions[(x, y)].append(pos)
 
-            if walls[3] == 0:
+            if walls[3] == 1:
                 pass
 
-        return ways
+        print("\n\nNot taken: ", self.not_taken_positions)
 
     def check_walls(self):
         center_id = 0
