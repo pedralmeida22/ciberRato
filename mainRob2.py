@@ -1,4 +1,6 @@
 import sys
+
+from astar import astar
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
@@ -164,12 +166,12 @@ class MyRob(CRobLinkAngs):
 
                 if target is None:
                     # a*
-                    pass
+                    goal = self.calc_nearest_not_visited()
+                    self.path = astar(self.last_target, goal, self.visited_positions, "walls")
                 else:
                     self.target = target
-
-                state = self.next_move(self.last_target, self.target)
-                print("next state: " + state)
+                    state = self.next_move(self.last_target, self.target)
+                    print("next state: " + state)
 
             elif state == 'end':
                 self.driveMotors(0, 0)
@@ -179,6 +181,9 @@ class MyRob(CRobLinkAngs):
                 self.driveMotors(0, 0)
                 print("state the-way")
 
+    def calc_nearest_not_visited(self):
+        # TODO calcular posicao nao visitada mais perto
+        return self.not_taken_positions.keys()[0]
 
     def has_reached_target(self, pos, next_pos):
         if self.orientation == 0:
@@ -207,7 +212,7 @@ class MyRob(CRobLinkAngs):
 
         # calcular target com base nos caminhos possiveis, guarda os caminhos possiveis nao escolhidos
         temp = self.possible_targets(self.check_walls())
-        if temp[0] != () and temp[0] not in self.visited_positions:     # frente
+        if temp[0] != () and temp[0] not in self.visited_positions:  # frente
             target = temp[0]
 
             if temp[1] != () and temp[1] not in self.visited_positions:
@@ -216,18 +221,36 @@ class MyRob(CRobLinkAngs):
             if temp[2] != () and temp[2] not in self.visited_positions:
                 self.not_taken_positions[(x, y)].add(temp[2])
 
-        elif temp[1] != () and temp[1] not in self.visited_positions:   # esquerda
+        elif temp[1] != () and temp[1] not in self.visited_positions:  # esquerda
             target = temp[1]
 
             if temp[2] != () and temp[2] not in self.visited_positions:
                 self.not_taken_positions[(x, y)].add(temp[2])
 
-        elif temp[2] != () and temp[2] not in self.visited_positions:   # direita
+        elif temp[2] != () and temp[2] not in self.visited_positions:  # direita
             target = temp[2]
+
+        self.clean_not_taken()
 
         print(f"\ntarget -> ({target[0]},{target[1]})")
         print("\nNot taken: ", self.not_taken_positions)
         return target
+
+    def clean_not_taken(self):
+        to_remove = []
+        for key, sett in self.not_taken_positions.items():
+            if len(sett) == 0:
+                to_remove.append(key)
+                continue
+
+            for pos in sett:
+                if self.target == pos:
+                    print("Removing pos from not taken: ", pos)
+                    self.not_taken_positions[key].remove(pos)
+
+        print("To remove: ", to_remove)
+        for i in to_remove:
+            self.not_taken_positions.pop(i)
 
     # ver direção do bicho para calcular next_pos
     def direction(self):
