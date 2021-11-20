@@ -75,14 +75,17 @@ class MyRob(CRobLinkAngs):
                 print("orientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
 
-                if self.orientation == 0:
-                    self.mapa[(28 + self.pos[0] + 1, 14 - self.pos[1])] = "X"
-                elif self.orientation == 90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] + 1))] = "X"
-                elif self.orientation == 180:
-                    self.mapa[(28 + (self.pos[0] - 1), 14 - self.pos[1])] = "X"
-                elif self.orientation == -90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] - 1))] = "X"
+                if self.last_target[0] == 0 and self.last_target[1] == 0:
+                    self.mapa[(28 + self.last_target[0], 14 - self.last_target[1])] = "I"
+                else:
+                    if self.orientation == 0:
+                        self.mapa[(28 + self.last_target[0] + 1, 14 - self.last_target[1])] = "X"
+                    elif self.orientation == 90:
+                        self.mapa[(28 + self.last_target[0], 14 - (self.last_target[1] + 1))] = "X"
+                    elif self.orientation == 180:
+                        self.mapa[(28 + (self.last_target[0] - 1), 14 - self.last_target[1])] = "X"
+                    elif self.orientation == -90:
+                        self.mapa[(28 + self.last_target[0], 14 - (self.last_target[1] - 1))] = "X"
 
                 # nao tem target, rip
                 if self.target == ():
@@ -102,12 +105,10 @@ class MyRob(CRobLinkAngs):
                     # verificar se ja chegou à posicao objetivo
                     if self.has_reached_target(self.pos, self.target):
                         print("\n\n Cheguei ao target")
+
+                        self.visited_positions.add(self.target)
                         self.last_target = self.target
                         self.target = ()
-
-                        if self.last_target not in self.visited_positions:
-                            self.visited_positions.add(self.last_target)
-
                         self.clean_not_taken()
 
                         state = "mapping"
@@ -331,25 +332,23 @@ class MyRob(CRobLinkAngs):
 
         if target is not None:
             print(f"\ntarget -> ({target[0]},{target[1]})")
-
-        print("\n Visited: ", self.visited_positions)
         print("\nNot taken: ", self.not_taken_positions)
         return target
 
     def clean_not_taken(self):
         # tirar posicao onde estou dos not_taken
+        if self.last_target in self.not_taken_positions.keys():
+            self.not_taken_positions.pop(self.last_target, None)
+
         # apagar posicoes que ja nao tem nenhum caminho que ja nao tenha sido percorrido
         to_remove = []
+        for key, sett in self.not_taken_positions.items():
+            if len(sett) == 0:
+                to_remove.append(key)
 
-        for key in self.not_taken_positions.keys():
-            if self.last_target in self.not_taken_positions[key]:
-                self.not_taken_positions[key].discard(self.last_target)
-
-                if len(self.not_taken_positions[key]) == 0:
-                    to_remove.append(key)
-
-        for key in to_remove:
-            self.not_taken_positions.pop(key, None)
+        print("To remove: ", to_remove)
+        for i in to_remove:
+            self.not_taken_positions.pop(i)
 
     # ver direção do bicho para calcular next_pos
     def direction(self):
