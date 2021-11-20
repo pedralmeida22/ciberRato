@@ -46,10 +46,10 @@ def astar(start, goal, array, walls):
             if j == -2 and ((current[0], current[1] - 1) in walls):
                 continue
 
-            if neighbor in close_set and tentative_g_score >= gscore.get(neighbor, 0):
+            if neighbor in close_set and tentative_g_score > gscore.get(neighbor, 0):
                 continue
 
-            if tentative_g_score < gscore.get(neighbor, 0) or neighbor not in [i[1] for i in oheap]:
+            if tentative_g_score <= gscore.get(neighbor, 0) or neighbor not in [i[1] for i in oheap]:
                 came_from[neighbor] = current
                 gscore[neighbor] = tentative_g_score
                 fscore[neighbor] = tentative_g_score + heuristic(neighbor, goal)

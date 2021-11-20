@@ -2,7 +2,6 @@ import sys
 
 from astar import *
 from croblink import *
-from math import *
 import xml.etree.ElementTree as ET
 
 CELLROWS = 7
@@ -22,6 +21,7 @@ class MyRob(CRobLinkAngs):
     i_know_the_way = True if path != [] and path is not None else False
     paredes = dict()
     mapa = dict()
+    spots = dict()
 
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
@@ -64,8 +64,7 @@ class MyRob(CRobLinkAngs):
                 state = 'stop'
 
             if state == 'go_ahead':
-                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1],
-                                                                                  2)
+                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1], 2)
 
                 print(f"\nPosition -> ({self.pos[0]},{self.pos[1]})")
 
@@ -84,33 +83,27 @@ class MyRob(CRobLinkAngs):
                 elif self.orientation == -90:
                     self.mapa[(28 + self.pos[0], 14 - (self.pos[1] - 1))] = "X"
 
-                # nao tem target, rip
-                if self.target == ():
-                    print("No target!")
-                    state = "end"
-
                 # ainda nao chegou ao objetivo, anda
+                if self.orientation == 180:  # andar para esquerda
+                    if self.measures.compass < 0:
+                        self.forwards(0.15, 0.01, self.measures.compass, -180)
+                    elif self.measures.compass > 0:
+                        self.forwards(0.15, 0.01, self.measures.compass, 180)
                 else:
-                    if self.orientation == 180:  # andar para esquerda
-                        if self.measures.compass < 0:
-                            self.forwards(0.15, 0.01, self.measures.compass, -180)
-                        elif self.measures.compass > 0:
-                            self.forwards(0.15, 0.01, self.measures.compass, 180)
-                    else:
-                        self.forwards(0.15, 0.01, self.measures.compass, self.orientation)
+                    self.forwards(0.15, 0.01, self.measures.compass, self.orientation)
 
-                    # verificar se ja chegou à posicao objetivo
-                    if self.has_reached_target(self.pos, self.target):
-                        print("\n\n Cheguei ao target")
-                        self.last_target = self.target
-                        self.target = ()
+                # verificar se ja chegou à posicao objetivo
+                if self.has_reached_target(self.pos, self.target):
+                    print("\n\n Cheguei ao target")
+                    self.last_target = self.target
+                    self.target = ()
 
-                        if self.last_target not in self.visited_positions:
-                            self.visited_positions.add(self.last_target)
+                    if self.last_target not in self.visited_positions:
+                        self.visited_positions.add(self.last_target)
 
-                        self.clean_not_taken()
+                    self.clean_not_taken()
 
-                        state = "mapping"
+                    state = "mapping"
 
             elif state == 'rotate_left':
                 print("orientation: " + str(self.orientation))
@@ -212,6 +205,9 @@ class MyRob(CRobLinkAngs):
                 print("\n---MAPPING---")
                 self.driveMotors(0, 0)
 
+                # verificar ground sensor
+                self.save_spots()
+
                 # tem target, vai só
                 if self.target != ():
                     print("tem target vai só")
@@ -227,20 +223,13 @@ class MyRob(CRobLinkAngs):
                         print("no target, no path")
 
                         if self.not_taken_positions == {} and len(self.visited_positions) >= 10:
-                            self.writeMap()
+                            # paths = self.calc_shortest_path()
+                            # self.writePath(paths)
                             print("Time: ", self.measures.time)
                             self.finish()
                             return
 
-                        if self.last_target in self.not_taken_positions.keys():
-                            target = self.not_taken_positions[self.last_target].pop()
-
-                            if len(self.not_taken_positions[self.last_target]) == 0:
-                                self.not_taken_positions.pop(self.last_target, None)
-
-                        else:
-                            print("calcular next target")
-                            target = self.calc_next_target()
+                        target = self.calc_next_target()
 
                         if target is None:  # procurar caminho com astar
                             # a*
@@ -254,9 +243,21 @@ class MyRob(CRobLinkAngs):
 
                 print("next state: " + state)
 
-            elif state == 'end':
-                self.driveMotors(0, 0)
-                print("state end")
+    def calc_shortest_path(self):
+        print("\nSpots: ", self.spots)
+        number_of_spots = len(self.spots.keys())
+        paths = []
+        for spot in range(number_of_spots - 1):
+            temp = astar(self.spots[spot], self.pos[spot+1], self.visited_positions, self.paredes.keys())
+            paths.append(temp)
+
+        paths.append(astar(self.spots[number_of_spots-1], self.pos[0], self.visited_positions, list(self.paredes.keys())))
+
+        return paths
+
+    def save_spots(self):
+        if self.measures.ground != -1:
+            self.spots[self.measures.ground] = self.last_target
 
     def calc_nearest_not_visited(self):
         nearest = 99
@@ -332,7 +333,7 @@ class MyRob(CRobLinkAngs):
         if target is not None:
             print(f"\ntarget -> ({target[0]},{target[1]})")
 
-        print("\n Visited: ", self.visited_positions)
+        print("\nVisited: ", self.visited_positions)
         print("\nNot taken: ", self.not_taken_positions)
         return target
 
@@ -571,20 +572,11 @@ class MyRob(CRobLinkAngs):
         elif direction == "right":
             self.driveMotors(power, -power)
 
-    def writeMap(self):
-        file = open("map.txt", 'w')
-        lista = list(self.mapa.keys())
-        # print(lista)
-        # print(self.mapa)
+    def writePath(self, paths):
+        file = open("path.txt", 'w')
 
-        for i in range(1, 27):
-            for j in range(1, 56):
-                if (j, i) in self.mapa.keys():
-                    # print(j)
-                    # print(i)
-                    file.write(self.mapa.get((j, i)))
-                else:
-                    file.write(' ')
+        for i in paths:
+            file.write(i)
             file.write('\n')
         file.close()
 
