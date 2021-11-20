@@ -1,6 +1,6 @@
 import sys
 
-# from astar import astar
+from astar import *
 from croblink import *
 from math import *
 import xml.etree.ElementTree as ET
@@ -20,8 +20,8 @@ class MyRob(CRobLinkAngs):
     not_taken_positions = {}  # set com posicoes conhecidas nao visitadas
     path = []
     i_know_the_way = True if path != [] else False
-    mapa = dict()
     paredes = dict()
+    mapa = dict()
 
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
@@ -35,74 +35,7 @@ class MyRob(CRobLinkAngs):
         for l in reversed(self.labMap):
             print(''.join([str(l) for l in l]))
 
-    def writeMap(self):
-        file = open("map.txt", 'w')
-        lista=list(self.mapa.keys())
-        print(lista)
-        print(self.mapa)
-
-        for i in range(1, 27):
-            for j in range(1, 56):
-                if (j, i) in self.mapa.keys():
-                    print(j)
-                    print(i)
-                    file.write(self.mapa.get((j, i)))
-                else:
-                    file.write(' ')
-            file.write('\n')
-        file.close()
-
-    def drawMap(self, dic):
-
-        space=False;
-
-        lista=list(dic.keys())
-        # lista.add((23.5,14,"h"))
-        xs = []
-        ys = []
-        real = []
-
-        for a, b in lista:
-            xs.append(a)
-            ys.append(b)
-
-        for y in lista:
-            # z1 = y[0] - min(xs)
-            # z2 = 27-(y[1] - min(ys))
-            # print(z2)
-            # real.append((z1, z2))
-            z1=y[0]+28
-            z2=14-y[1]
-            real.append((z1,z2))
-
-
-        print(lista)
-        print(real)
-
-        f = open("file.txt", "w")
-
-        for l in range(1, 27):
-            for c in range(1, 56):
-                space=True
-                wall = (c, l)
-                for x, y in lista:
-                    # print(wall)
-                    if wall == (x, y):
-                        print("ze")
-                        print(wall)
-                        space=False
-                        f.write(dic[(x-28,14-y)])
-                            # if z == "v" else f.write("-")
-                if space:
-                    f.write(" ")
-            f.write("\n")
-
-        # f.write("!")
-        # f.close()
-
     def run(self):
-        end=False
-
         if self.status != 0:
             print("Connection refused or error")
             quit()
@@ -114,7 +47,9 @@ class MyRob(CRobLinkAngs):
             self.readSensors()
 
             if self.measures.endLed:
-                print(self.rob_name + " exiting")
+                print(self.robName + " exiting")
+                self.finish()
+                print(self.measures.time)
                 quit()
 
             if state == 'stop' and self.measures.start:
@@ -124,33 +59,32 @@ class MyRob(CRobLinkAngs):
                 self.pos = (0, 0)
                 self.last_target = self.pos
                 self.orientation = self.direction()
-                self.visited_positions.add(self.initial_pos)
+                self.visited_positions.add(self.pos)
 
             if state != 'stop' and self.measures.stop:
                 stopped_state = state
                 state = 'stop'
 
             if state == 'go_ahead':
-                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1], 2)
+                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1],
+                                                                                  2)
 
                 print(f"\nPosition -> ({self.pos[0]},{self.pos[1]})")
 
                 if self.target != ():
                     print(f"target -> ({self.target[0]},{self.target[1]})")
 
-
-                if self.orientation==0:
-                    self.mapa[(28 + self.pos[0]+1, 14 - self.pos[1])] = "X"
-                elif self.orientation==90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1]+1))] = "X"
-                elif self.orientation==180:
-                    self.mapa[(28 + (self.pos[0]-1), 14 - self.pos[1])] = "X"
-                elif self.orientation==-90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1]-1))] = "X"
-
-
                 print("orientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
+
+                if self.orientation == 0:
+                    self.mapa[(28 + self.pos[0] + 1, 14 - self.pos[1])] = "X"
+                elif self.orientation == 90:
+                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] + 1))] = "X"
+                elif self.orientation == 180:
+                    self.mapa[(28 + (self.pos[0] - 1), 14 - self.pos[1])] = "X"
+                elif self.orientation == -90:
+                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] - 1))] = "X"
 
                 # nao tem target, rip
                 if self.target == ():
@@ -171,13 +105,11 @@ class MyRob(CRobLinkAngs):
                     if self.has_reached_target(self.pos, self.target):
                         print("\n\n Cheguei ao target")
 
-                        for key, list in self.not_taken_positions.items():
-                            for pos in list:
-                                if self.target == pos:
-                                    print("Removing pos from not taken: ", pos)
-                                    self.not_taken_positions[key].remove(pos)
-
+                        self.visited_positions.add(self.target)
                         self.last_target = self.target
+                        self.target = ()
+                        self.clean_not_taken()
+
                         state = "mapping"
 
             elif state == 'rotate_left':
@@ -242,41 +174,60 @@ class MyRob(CRobLinkAngs):
                 print("\n---MAPPING---")
                 self.driveMotors(0, 0)
 
-                if self.i_know_the_way:
-                    self.target = self.path.pop()
+                # tem target, vai só
+                if self.target != ():
+                    print("tem target vai só")
+                    state = self.next_move(self.last_target, self.target)
 
                 else:
-                    target = self.calc_next_target()
+                    if self.i_know_the_way:
+                        print("i know the way")
+                        self.target = self.path.pop()
 
-                    if target is None:
-                        # a*
-                        # goal = self.calc_nearest_not_visited()
-                        # print("\nGoal: ", goal)
-                        # print("\nvisited position -> ", self.visited_positions)
-                        # print("\nparedes -> ", self.mapa.keys())
-                        # self.path = astar(self.last_target, goal, self.visited_positions, self.mapa.keys())
-                        # print("Path: ", self.path)
-                        # self.target = self.path.pop()
-
-                        state="end"
-                        end=True
-
+                    # nao tem target nem path, calcula target
                     else:
-                        self.target = target
+                        print("no target, no path")
+                        if self.last_target in self.not_taken_positions.keys():
+                            target = self.not_taken_positions[self.last_target].pop()
 
-                if not end:
-                    state = self.next_move(self.last_target, self.target)
-                    print("next state: " + state)
-                else: state="end"
+                            if len(self.not_taken_positions[self.last_target]) == 0:
+                                self.not_taken_positions.pop(self.last_target, None)
+
+                            if self.not_taken_positions == {} and len(self.visited_positions) >= 10:
+                                self.writeMap()
+                                self.measures.endLed = True
+
+                        else:
+                            print("calcular next target")
+                            target = self.calc_next_target()
+
+                        if target is None:  # procurar caminho com astar
+                            # a*
+                            goal = self.calc_nearest_not_visited()
+                            print("\nGoal: ", goal)
+                            print("\nStart: ", self.last_target)
+                            print("\nvisited position -> ", list(self.visited_positions))
+                            print("\nparedes -> ", list(self.paredes.keys()))
+                            self.path = astar(self.last_target, goal, self.visited_positions, list(self.paredes.keys()))
+                            print("Path: ", self.path)
+
+                            self.target = self.path.pop()
+
+                        else:
+                            self.target = target
+
+                        state = self.next_move(self.last_target, self.target)
+
+                print("next state: " + state)
 
             elif state == 'end':
                 self.driveMotors(0, 0)
                 print("state end")
-                self.writeMap()
 
     def calc_nearest_not_visited(self):
-        # TODO calcular posicao nao visitada mais perto
-        return list(self.not_taken_positions.keys())[0]
+        return min(self.not_taken_positions.keys(),
+                   key=lambda pos: (abs(pos[0] - self.last_target[0]), abs(pos[1] - self.last_target[1])))
+        # return list(self.not_taken_positions.keys())[0]
 
     def has_reached_target(self, pos, next_pos):
         if self.orientation == 0:
@@ -305,6 +256,8 @@ class MyRob(CRobLinkAngs):
         temp = self.possible_targets(self.check_walls())
         target = None
 
+        print("temp: ", temp)
+
         if temp[0] != () and temp[0] not in self.visited_positions:  # frente
             target = temp[0]
 
@@ -323,7 +276,8 @@ class MyRob(CRobLinkAngs):
         elif temp[1] != () and temp[1] not in self.visited_positions:  # esquerda
             target = temp[1]
 
-        self.clean_not_taken()
+        if len(self.not_taken_positions[x, y]) == 0:
+            self.not_taken_positions.pop((x, y), None)
 
         if target is not None:
             print(f"\ntarget -> ({target[0]},{target[1]})")
@@ -331,16 +285,15 @@ class MyRob(CRobLinkAngs):
         return target
 
     def clean_not_taken(self):
+        # tirar posicao onde estou dos not_taken
+        if self.last_target in self.not_taken_positions.keys():
+            self.not_taken_positions.pop(self.last_target, None)
+
+        # apagar posicoes que ja nao tem nenhum caminho que ja nao tenha sido percorrido
         to_remove = []
         for key, sett in self.not_taken_positions.items():
             if len(sett) == 0:
                 to_remove.append(key)
-                continue
-
-            for pos in sett:
-                if self.target == pos:
-                    print("Removing pos from not taken: ", pos)
-                    self.not_taken_positions[key].remove(pos)
 
         print("To remove: ", to_remove)
         for i in to_remove:
@@ -379,6 +332,9 @@ class MyRob(CRobLinkAngs):
             elif diff[0] == 0 and diff[1] == 2:
                 return "rotate_right"
 
+            else:
+                return "rotate_left"
+
         elif self.orientation == 90:  # cima
             if diff[0] == -2 and diff[1] == 0:
                 return "rotate_right"
@@ -387,6 +343,9 @@ class MyRob(CRobLinkAngs):
                 return "go_ahead"
 
             elif diff[0] == 2 and diff[1] == 0:
+                return "rotate_left"
+
+            else:
                 return "rotate_left"
 
         elif self.orientation == -90:  # baixo
@@ -399,6 +358,9 @@ class MyRob(CRobLinkAngs):
             elif diff[0] == -2 and diff[1] == 0:
                 return "rotate_left"
 
+            else:
+                return "rotate_left"
+
         elif self.orientation == 180:  # esquerda
             if diff[0] == 2 and diff[1] == 0:
                 return "go_ahead"
@@ -409,128 +371,103 @@ class MyRob(CRobLinkAngs):
             elif diff[0] == 0 and diff[1] == -2:
                 return "rotate_right"
 
+            else:
+                return "rotate_left"
+
         return None
 
     def possible_targets(self, walls):
         x, y = self.last_target[0], self.last_target[1]
         ways = [(), (), ()]
-        # self.mapa[(28 + x, 14 - y)] = "X"
+        self.mapa[(28 + x, 14 - y)] = "X"
 
         if self.orientation == 0:  # direita
             if walls[0] == 0:
                 free_pos = (x + 2, y)
                 ways[0] = free_pos
             else:
-                self.mapa[(28+x + 1, 14-y)] = "|"
+                self.mapa[(28 + x + 1, 14 - y)] = "|"
                 self.paredes[(x + 1, y)] = "|"
 
             if walls[1] == 0:
                 free_pos = (x, y + 2)
                 ways[1] = free_pos
             else:
-                self.mapa[(28+x,14- (y + 1))] = "-"
-                self.paredes[( x,  y + 1)] = "-"
+                self.mapa[(28 + x, 14 - (y + 1))] = "-"
+                self.paredes[(x, y + 1)] = "-"
 
             if walls[2] == 0:
                 free_pos = (x, y - 2)
                 ways[2] = free_pos
             else:
-                self.mapa[(28+x, 14-(y - 1))] = "-"
-                self.paredes[( x,  y - 1)] = "-"
-
-            if walls[3] == 0:
-                pass
-            else:
-                pass
-                # self.mapa[(28+x - 1, 14-y)] = "|"
-                # self.paredes[( x - 1,  y)] = "|"
+                self.mapa[(28 + x, 14 - (y - 1))] = "-"
+                self.paredes[(x, y - 1)] = "-"
 
         elif self.orientation == 90:  # cima
             if walls[0] == 0:
                 free_pos = (x, y + 2)
                 ways[0] = free_pos
             else:
-                self.mapa[(28+x, 14-(y + 1))] = "-"
-                self.paredes[( x,  y + 1)] = "-"
+                self.mapa[(28 + x, 14 - (y + 1))] = "-"
+                self.paredes[(x, y + 1)] = "-"
 
             if walls[1] == 0:
                 free_pos = (x - 2, y)
                 ways[1] = free_pos
             else:
-                self.mapa[(28+(x - 1), 14-y)] = "|"
-                self.paredes[( x - 1,  y)] = "|"
+                self.mapa[(28 + (x - 1), 14 - y)] = "|"
+                self.paredes[(x - 1, y)] = "|"
 
             if walls[2] == 0:
                 free_pos = (x + 2, y)
                 ways[2] = free_pos
             else:
-                self.mapa[(28+(x + 1), 14-y)] = "|"
-                self.paredes[( x + 1,  y)] = "|"
-
-            if walls[3] == 1:
-                pass
-            else:
-                pass
-                # self.mapa[(28+x, 14-y - 1)] = "-"
-                # self.paredes[( x,  y - 1)] = "-"
+                self.mapa[(28 + (x + 1), 14 - y)] = "|"
+                self.paredes[(x + 1, y)] = "|"
 
         elif self.orientation == -90:  # baixo
             if walls[0] == 0:
                 free_pos = (x, y - 2)
                 ways[0] = free_pos
             else:
-                self.mapa[(28+x, 14-(y - 1))] = "-"
-                self.paredes[( x,  y - 1)] = "-"
+                self.mapa[(28 + x, 14 - (y - 1))] = "-"
+                self.paredes[(x, y - 1)] = "-"
 
             if walls[1] == 0:
                 free_pos = (x + 2, y)
                 ways[1] = free_pos
             else:
-                self.mapa[(28+x + 1, 14-y)] = "|"
-                self.paredes[( x + 1,  y)] = "|"
+                self.mapa[(28 + x + 1, 14 - y)] = "|"
+                self.paredes[(x + 1, y)] = "|"
 
             if walls[2] == 0:
                 free_pos = (x - 2, y)
                 ways[2] = free_pos
             else:
-                self.mapa[(28+(x - 1), 14-y)] = "|"
-                self.paredes[( x - 1,  y)] = "|"
-
-            if walls[3] == 0:
-                pass
-            else:
-                pass
-                # self.mapa[(28+x, 14-y + 1)] = "|"
-                # self.paredes[( x,  y + 1)] = "|"
+                self.mapa[(28 + (x - 1), 14 - y)] = "|"
+                self.paredes[(x - 1, y)] = "|"
 
         elif self.orientation == 180:  # esquerda
             if walls[0] == 0:
                 free_pos = (x - 2, y)
                 ways[0] = free_pos
             else:
-                self.mapa[(28+(x - 1), 14-y)] = "|"
-                self.paredes[( x - 1,  y)] = "|"
+                self.mapa[(28 + (x - 1), 14 - y)] = "|"
+                self.paredes[(x - 1, y)] = "|"
 
             if walls[1] == 0:
                 free_pos = (x, y - 2)
                 ways[1] = free_pos
             else:
-                self.mapa[(28+x, 14-(y - 1))] = "-"
-                self.paredes[( x,  y - 1)] = "-"
+                self.mapa[(28 + x, 14 - (y - 1))] = "-"
+                self.paredes[(x, y - 1)] = "-"
 
             if walls[2] == 0:
                 free_pos = (x, y + 2)
                 ways[2] = free_pos
             else:
-                self.mapa[(28+x, 14-(y + 1))] = "-"
-                self.paredes[( x,  y + 1)] = "-"
-
-            if walls[3] == 0:
-                pass
-            else:
-                pass
-                # self.mapa[(28+x + 1, 14-y)] = "|"
-                # self.paredes[( x + 1,  y)] = "|"
+                self.mapa[(28 + x, 14 - (y + 1))] = "-"
+                self.paredes[(x, y + 1)] = "-"
 
         return ways
 
@@ -550,16 +487,16 @@ class MyRob(CRobLinkAngs):
         # 1 - parede
         walls = [0, 0, 0, 0]
 
-        if front_sensor >= 1.3:
+        if front_sensor >= 1.2:
             walls[0] = 1
 
-        if left_sensor >= 1.3:
+        if left_sensor >= 1.2:
             walls[1] = 1
 
-        if right_sensor >= 1.3:
+        if right_sensor >= 1.2:
             walls[2] = 1
 
-        if back_sensor >= 1.3:
+        if back_sensor >= 1.2:
             walls[3] = 1
 
         return walls
@@ -582,10 +519,22 @@ class MyRob(CRobLinkAngs):
         elif direction == "right":
             self.driveMotors(power, -power)
 
-    def turnBack(self, bussola):
-        while abs((bussola - self.measures.compass) < 160):
-            print("A RODAAAAR")
-            print(self.driveMotors(-0.3, 0.3))
+    def writeMap(self):
+        file = open("map.txt", 'w')
+        lista = list(self.mapa.keys())
+        # print(lista)
+        # print(self.mapa)
+
+        for i in range(1, 27):
+            for j in range(1, 56):
+                if (j, i) in self.mapa.keys():
+                    # print(j)
+                    # print(i)
+                    file.write(self.mapa.get((j, i)))
+                else:
+                    file.write(' ')
+            file.write('\n')
+        file.close()
 
 
 class Map():
