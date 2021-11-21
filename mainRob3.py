@@ -2,6 +2,7 @@ import sys
 
 from astar import *
 from croblink import *
+from math import *
 import xml.etree.ElementTree as ET
 
 CELLROWS = 7
@@ -64,24 +65,13 @@ class MyRob(CRobLinkAngs):
                 state = 'stop'
 
             if state == 'go_ahead':
-                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1], 2)
+                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1],
+                                                                                  2)
 
                 print(f"\nPosition -> ({self.pos[0]},{self.pos[1]})")
 
                 if self.target != ():
                     print(f"target -> ({self.target[0]},{self.target[1]})")
-
-                print("orientation: " + str(self.orientation))
-                print("compass: " + str(self.measures.compass))
-
-                if self.orientation == 0:
-                    self.mapa[(28 + self.pos[0] + 1, 14 - self.pos[1])] = "X"
-                elif self.orientation == 90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] + 1))] = "X"
-                elif self.orientation == 180:
-                    self.mapa[(28 + (self.pos[0] - 1), 14 - self.pos[1])] = "X"
-                elif self.orientation == -90:
-                    self.mapa[(28 + self.pos[0], 14 - (self.pos[1] - 1))] = "X"
 
                 # ainda nao chegou ao objetivo, anda
                 if self.orientation == 180:  # andar para esquerda
@@ -95,13 +85,10 @@ class MyRob(CRobLinkAngs):
                 # verificar se ja chegou à posicao objetivo
                 if self.has_reached_target(self.pos, self.target):
                     print("\n\n Cheguei ao target")
+
+                    self.visited_positions.add(self.target)
                     self.last_target = self.target
                     self.target = ()
-
-                    if self.last_target not in self.visited_positions:
-                        self.visited_positions.add(self.last_target)
-
-                    self.clean_not_taken()
 
                     state = "mapping"
 
@@ -203,8 +190,10 @@ class MyRob(CRobLinkAngs):
 
             elif state == "mapping":
                 print("\n---MAPPING---")
-                self.driveMotors(0, 0)
+                print("Current position: ", self.last_target)
 
+                self.driveMotors(0, 0)
+                self.clean_not_taken()
                 # verificar ground sensor
                 self.save_spots()
 
@@ -223,13 +212,19 @@ class MyRob(CRobLinkAngs):
                         print("no target, no path")
 
                         if self.not_taken_positions == {} and len(self.visited_positions) >= 10:
-                            # paths = self.calc_shortest_path()
-                            # self.writePath(paths)
+                            paths = self.get_paths_between_spots()
+                            shortest_path, order = self.calc_shortest_path(paths)
+                            self.writePath(shortest_path, order)
                             print("Time: ", self.measures.time)
                             self.finish()
                             return
 
-                        target = self.calc_next_target()
+                        if self.last_target in self.not_taken_positions.keys():
+                            target = self.not_taken_positions[self.last_target].pop()
+
+                        else:
+                            print("calcular next target")
+                            target = self.calc_next_target()
 
                         if target is None:  # procurar caminho com astar
                             # a*
@@ -243,17 +238,47 @@ class MyRob(CRobLinkAngs):
 
                 print("next state: " + state)
 
-    def calc_shortest_path(self):
+            elif state == 'end':
+                self.driveMotors(0, 0)
+                print("state end")
+
+    def get_paths_between_spots(self):
         print("\nSpots: ", self.spots)
         number_of_spots = len(self.spots.keys())
-        paths = []
-        for spot in range(number_of_spots - 1):
-            temp = astar(self.spots[spot], self.pos[spot+1], self.visited_positions, self.paredes.keys())
-            paths.append(temp)
+        paths = dict()
 
-        paths.append(astar(self.spots[number_of_spots-1], self.pos[0], self.visited_positions, list(self.paredes.keys())))
+        for i in range(number_of_spots - 1):
+            for j in range(i + 1, number_of_spots):
+                temp = astar(self.spots[i], self.spots[j], self.visited_positions, self.paredes)
+
+                if i in paths.keys():
+                    paths[i].add((j, len(temp)))
+                else:
+                    paths[i] = set()
+                    paths[i].add((j, len(temp)))
+
+                if j in paths.keys():
+                    paths[j].add((i, len(temp)))
+                else:
+                    paths[j] = set()
+                    paths[j].add((i, len(temp)))
 
         return paths
+
+    def calc_shortest_path(self, paths):
+        order = smallPath(paths, 0)
+
+        shortest_path = [self.spots[0]]
+
+        for i in range(len(order) - 1):
+            temp = astar(self.spots[order[i]], self.spots[order[i+1]], self.visited_positions, self.paredes)
+            shortest_path.extend(temp[::-1])
+
+        temp = astar(self.spots[order[len(order) - 1]], self.spots[order[0]], self.visited_positions, self.paredes)
+        shortest_path.extend(temp[::-1])
+
+        return shortest_path, order
+
 
     def save_spots(self):
         if self.measures.ground != -1:
@@ -275,10 +300,6 @@ class MyRob(CRobLinkAngs):
 
         print("\nGoal: ", goal)
         print("Path: ", self.path)
-
-        # return min(self.not_taken_positions.keys(),
-        #            key=lambda pos: (abs(pos[0] - self.last_target[0]), abs(pos[1] - self.last_target[1])))
-        # return list(self.not_taken_positions.keys())[0]
 
     def has_reached_target(self, pos, next_pos):
         if self.orientation == 0:
@@ -327,14 +348,12 @@ class MyRob(CRobLinkAngs):
         elif temp[1] != () and temp[1] not in self.visited_positions:  # esquerda
             target = temp[1]
 
-        if len(self.not_taken_positions[x, y]) == 0:
+        if len(self.not_taken_positions[(x, y)]) == 0:
             self.not_taken_positions.pop((x, y), None)
 
         if target is not None:
             print(f"\ntarget -> ({target[0]},{target[1]})")
 
-        print("\nVisited: ", self.visited_positions)
-        print("\nNot taken: ", self.not_taken_positions)
         return target
 
     def clean_not_taken(self):
@@ -346,9 +365,10 @@ class MyRob(CRobLinkAngs):
             if self.last_target in self.not_taken_positions[key]:
                 self.not_taken_positions[key].discard(self.last_target)
 
-                if len(self.not_taken_positions[key]) == 0:
-                    to_remove.append(key)
+            if len(self.not_taken_positions[key]) == 0:
+                to_remove.append(key)
 
+        print("To remove: ", to_remove)
         for key in to_remove:
             self.not_taken_positions.pop(key, None)
 
@@ -438,6 +458,7 @@ class MyRob(CRobLinkAngs):
             if walls[0] == 0:
                 free_pos = (x + 2, y)
                 ways[0] = free_pos
+                self.mapa[(28 + x + 1, 14 - y)] = "X"
             else:
                 self.mapa[(28 + x + 1, 14 - y)] = "|"
                 self.paredes[(x + 1, y)] = "|"
@@ -445,6 +466,7 @@ class MyRob(CRobLinkAngs):
             if walls[1] == 0:
                 free_pos = (x, y + 2)
                 ways[1] = free_pos
+                self.mapa[(28 + x, 14 - (y + 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y + 1))] = "-"
                 self.paredes[(x, y + 1)] = "-"
@@ -452,6 +474,7 @@ class MyRob(CRobLinkAngs):
             if walls[2] == 0:
                 free_pos = (x, y - 2)
                 ways[2] = free_pos
+                self.mapa[(28 + x, 14 - (y - 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y - 1))] = "-"
                 self.paredes[(x, y - 1)] = "-"
@@ -460,6 +483,7 @@ class MyRob(CRobLinkAngs):
             if walls[0] == 0:
                 free_pos = (x, y + 2)
                 ways[0] = free_pos
+                self.mapa[(28 + x, 14 - (y + 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y + 1))] = "-"
                 self.paredes[(x, y + 1)] = "-"
@@ -467,6 +491,7 @@ class MyRob(CRobLinkAngs):
             if walls[1] == 0:
                 free_pos = (x - 2, y)
                 ways[1] = free_pos
+                self.mapa[(28 + (x - 1), 14 - y)] = "X"
             else:
                 self.mapa[(28 + (x - 1), 14 - y)] = "|"
                 self.paredes[(x - 1, y)] = "|"
@@ -474,6 +499,7 @@ class MyRob(CRobLinkAngs):
             if walls[2] == 0:
                 free_pos = (x + 2, y)
                 ways[2] = free_pos
+                self.mapa[(28 + (x + 1), 14 - y)] = "X"
             else:
                 self.mapa[(28 + (x + 1), 14 - y)] = "|"
                 self.paredes[(x + 1, y)] = "|"
@@ -482,6 +508,7 @@ class MyRob(CRobLinkAngs):
             if walls[0] == 0:
                 free_pos = (x, y - 2)
                 ways[0] = free_pos
+                self.mapa[(28 + x, 14 - (y - 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y - 1))] = "-"
                 self.paredes[(x, y - 1)] = "-"
@@ -489,6 +516,7 @@ class MyRob(CRobLinkAngs):
             if walls[1] == 0:
                 free_pos = (x + 2, y)
                 ways[1] = free_pos
+                self.mapa[(28 + x + 1, 14 - y)] = "X"
             else:
                 self.mapa[(28 + x + 1, 14 - y)] = "|"
                 self.paredes[(x + 1, y)] = "|"
@@ -496,6 +524,7 @@ class MyRob(CRobLinkAngs):
             if walls[2] == 0:
                 free_pos = (x - 2, y)
                 ways[2] = free_pos
+                self.mapa[(28 + (x - 1), 14 - y)] = "X"
             else:
                 self.mapa[(28 + (x - 1), 14 - y)] = "|"
                 self.paredes[(x - 1, y)] = "|"
@@ -504,6 +533,7 @@ class MyRob(CRobLinkAngs):
             if walls[0] == 0:
                 free_pos = (x - 2, y)
                 ways[0] = free_pos
+                self.mapa[(28 + (x - 1), 14 - y)] = "X"
             else:
                 self.mapa[(28 + (x - 1), 14 - y)] = "|"
                 self.paredes[(x - 1, y)] = "|"
@@ -511,6 +541,7 @@ class MyRob(CRobLinkAngs):
             if walls[1] == 0:
                 free_pos = (x, y - 2)
                 ways[1] = free_pos
+                self.mapa[(28 + x, 14 - (y - 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y - 1))] = "-"
                 self.paredes[(x, y - 1)] = "-"
@@ -518,6 +549,7 @@ class MyRob(CRobLinkAngs):
             if walls[2] == 0:
                 free_pos = (x, y + 2)
                 ways[2] = free_pos
+                self.mapa[(28 + x, 14 - (y + 1))] = "X"
             else:
                 self.mapa[(28 + x, 14 - (y + 1))] = "-"
                 self.paredes[(x, y + 1)] = "-"
@@ -540,7 +572,7 @@ class MyRob(CRobLinkAngs):
         # 1 - parede
         walls = [0, 0, 0, 0]
 
-        if front_sensor >= 1.2:
+        if front_sensor >= 1:
             walls[0] = 1
 
         if left_sensor >= 1.2:
@@ -572,14 +604,23 @@ class MyRob(CRobLinkAngs):
         elif direction == "right":
             self.driveMotors(power, -power)
 
-    def writePath(self, paths):
-        file = open("path.txt", 'w')
+    def writePath(self, path, order):
+        file = open("pathC3.out", 'w')
 
-        for i in paths:
-            file.write(i)
-            file.write('\n')
+        for i in range(len(path)):
+            if path[i] in self.spots.values():
+
+                for key in self.spots.keys():
+                    if key == 0:
+                        file.write(str(path[i][0]) + " " + str(path[i][1]))
+                        file.write('\n')
+                    elif self.spots[key] == path[i] and key !=0:
+                        file.write(str(path[i][0]) + " " + str(path[i][1]) + " #" + str(key))
+                        file.write('\n')
+            else:
+                file.write(str(path[i][0]) + " " + str(path[i][1]))
+                file.write('\n')
         file.close()
-
 
 class Map():
     def __init__(self, filename):

@@ -1,8 +1,11 @@
 from heapq import *
+from itertools import permutations
+from math import dist
+from sys import maxsize
 
 
 def heuristic(a, b):
-    return (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
+    return dist(a, b)
 
 
 def astar(start, goal, array, walls):
@@ -56,3 +59,37 @@ def astar(start, goal, array, walls):
                 heappush(oheap, (fscore[neighbor], neighbor))
 
     return None
+
+
+def smallPath(graph, start):
+    points = []
+    print("START->", start)
+
+    for p in graph.keys():
+        if p != start:
+            points.append(p)
+
+    path = []
+    min_path = maxsize
+    permutacoes = permutations(points)
+
+    for i in permutacoes:
+        cost = 0
+
+        k = start
+        temp = []
+        temp.append(k)
+
+        for j in i:
+            # print("Debug " + str(k) + "-> " + str(graph[k]))
+            p = [x for x in graph[k] if x[0] == j]
+            cost += p[0][1]
+            k = j
+            temp.append(p[0][0])
+        p = [x for x in graph[k] if x[0] == start]
+        cost += p[0][1]
+
+        if min_path > cost:
+            min_path = cost
+            path = temp
+    return path

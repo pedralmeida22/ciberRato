@@ -525,7 +525,7 @@ class MyRob(CRobLinkAngs):
         # 1 - parede
         walls = [0, 0, 0, 0]
 
-        if front_sensor >= 1.2:
+        if front_sensor >= 1:
             walls[0] = 1
 
         if left_sensor >= 1.2:
