@@ -15,8 +15,6 @@ class MyRob(CRobLinkAngs):
     pos = ()  # posicao atual
     my_x = 0 # x calculado 
     my_y = 0 # y calculado
-    prev_my_x = 0 # x anterior 
-    prev_my_y = 0 # y anterior
     my_pos = () # posicao atual calculada
     prev_out_l = 0   # ultima potencia aplicada na roda esquerda
     prev_out_r = 0   # ultima potencia aplicada na roda direita
@@ -32,7 +30,8 @@ class MyRob(CRobLinkAngs):
     paredes = dict()
     mapa = dict()
     spots = dict()  # dicionario com as posicoes dos spots encontrados
-    turn_priority = "turn"
+    turn_priority = "front"
+    last_state = ""
 
     def __init__(self, rob_name, rob_id, angles, host):
         CRobLinkAngs.__init__(self, rob_name, rob_id, angles, host)
@@ -61,15 +60,14 @@ class MyRob(CRobLinkAngs):
                 print(self.robName + " exiting")
                 quit()
 
-            if state == 'stop' and self.measures.start:
+            if state == 'stop': # and self.measures.start:
                 state = stopped_state
                 self.initial_pos = (self.measures.x, self.measures.y)
-                print(f"Initial pos -> ({self.initial_pos[0]},{self.initial_pos[1]})")
+                # print(f"Initial pos -> ({self.initial_pos[0]},{self.initial_pos[1]})")
                 self.pos = (0, 0)
                 self.last_target = self.pos
                 self.orientation = self.direction()
                 self.visited_positions.add(self.pos)
-                self.my_pos = (self.my_x, self.my_y)
 
             if state != 'stop' and self.measures.stop:
                 stopped_state = state
@@ -94,21 +92,21 @@ class MyRob(CRobLinkAngs):
                 else:
                     self.forwards(0.15, 0.01, self.measures.compass, self.orientation)
 
-                self.gps()
-
                 # verificar se ja chegou à posicao objetivo
-                if self.has_reached_target(self.pos, self.target):
+                if self.has_reached_target(self.my_pos, self.target) or self.measures.irSensor[0] > 3:
                     print("\n\n Cheguei ao target")
-
+                    print("front:", self.measures.irSensor[0])
                     self.visited_positions.add(self.target)
                     self.last_target = self.target
                     self.target = ()
 
+                    self.last_state = state
                     state = "mapping"
 
             elif state == 'rotate_left':
                 print("orientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
+                self.update_prev_in_power(0, 0)
 
                 if self.next_orientation is None:
                     # somar 90 graus
@@ -137,6 +135,7 @@ class MyRob(CRobLinkAngs):
             elif state == 'rotate_right':
                 print("\norientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
+                self.update_prev_in_power(0, 0)
 
                 if self.next_orientation is None:
                     # subtrair 90 graus
@@ -176,6 +175,7 @@ class MyRob(CRobLinkAngs):
             elif state == 'sbinalla':
                 print("orientation: " + str(self.orientation))
                 print("compass: " + str(self.measures.compass))
+                self.update_prev_in_power(0, 0)
 
                 if self.next_orientation is None:
                     if self.orientation == 90 or self.orientation == -90:
@@ -204,11 +204,18 @@ class MyRob(CRobLinkAngs):
 
             elif state == "mapping":
                 print("\n---MAPPING---")
-                print("Current position: ", self.last_target)
-
                 self.driveMotors(0, 0)
-                self.prev_out_l = 0
-                self.prev_out_r = 0
+                self.update_prev_in_power(0, 0)
+
+                print("bMy position: ", self.my_pos)
+                self.correct_gps_walls_position(self.last_target)
+                
+                self.pos = round(self.measures.x - self.initial_pos[0], 2), round(self.measures.y - self.initial_pos[1],
+                                                                                2)
+                print("Current cell: ", self.last_target)
+                print(f"Position -> ({self.pos[0]},{self.pos[1]})")
+                print("aMy position: ", self.my_pos)
+
                 self.clean_not_taken()
                 # verificar ground sensor
                 self.save_spots()
@@ -227,13 +234,14 @@ class MyRob(CRobLinkAngs):
                     else:
                         print("no target, no path")
 
-                        if self.not_taken_positions == {} and len(self.visited_positions) >= 10:
-                            paths = self.get_paths_between_spots()
-                            shortest_path, order = self.calc_shortest_path(paths)
-                            self.writePath(shortest_path, order)
-                            print("Time: ", self.measures.time)
-                            self.finish()
-                            return
+                        # if self.not_taken_positions == {} and len(self.visited_positions) >= 10:
+                        #     print("Tá feito..")
+                        #     paths = self.get_paths_between_spots()
+                        #     shortest_path, order = self.calc_shortest_path(paths)
+                        #     self.writePath(shortest_path, order)
+                        #     print("Time: ", self.measures.time)
+                        #     self.finish()
+                        #     return
 
                         if self.last_target in self.not_taken_positions.keys():
                             target = self.not_taken_positions[self.last_target].pop()
@@ -253,6 +261,22 @@ class MyRob(CRobLinkAngs):
                         state = self.next_move(self.last_target, self.target)
 
                 print("next state: " + state)
+                self.last_state = state
+            
+            self.gps()
+    
+    def correct_gps(self, target):  # not used
+        self.my_x, self.my_y = ((self.my_x + target[0]) / 2), ((self.my_y + target[1]) / 2)
+        self.my_pos = (self.my_x, self.my_y)
+        # print("My position: ", self.my_pos)
+
+
+    def update_prev_in_power(self, l_power, r_power):
+        self.prev_out_l = self.in_power_l
+        self.prev_out_r = self.in_power_r
+        self.in_power_l = l_power
+        self.in_power_r = r_power
+
 
     def movement(self, previous_out, in_power):
         return (in_power + previous_out) / 2
@@ -260,17 +284,16 @@ class MyRob(CRobLinkAngs):
     def gps(self):
         out_l = self.movement(self.prev_out_l, self.in_power_l)
         out_r = self.movement(self.prev_out_r, self.in_power_r)
-
-        self.prev_my_x = self.my_x
-        self.prev_my_y = self.my_y
-
+        
         # translation
-        print("ori: ", self.orientation)
-        lin = (out_l + out_r) / 2
-        # self.my_x = self.my_x + lin * cos(0)
-        # self.my_y = self.my_y + lin * sin(0)
-        self.my_x = self.my_x + lin * cos(self.orientation)
-        self.my_y = self.my_y + lin * sin(self.orientation)
+        if self.prev_out_l == 0 and self.prev_out_r == 0:
+            print("Arrancar")
+            lin = ((out_l + out_r) / 2) / 2
+        else:
+            lin = (out_l + out_r) / 2
+        
+        self.my_x = self.my_x + lin * cos(radians(self.direction()))
+        self.my_y = self.my_y + lin * sin(radians(self.direction()))
 
         self.my_pos = round(self.my_x, 2), round(self.my_y, 2)
 
@@ -339,19 +362,19 @@ class MyRob(CRobLinkAngs):
 
     def has_reached_target(self, pos, next_pos):
         if self.orientation == 0:
-            if next_pos[0] - pos[0] <= 0.35:
+            if next_pos[0] - pos[0] <= 0.25:
                 return True
 
         elif self.orientation == 180:
-            if pos[0] - next_pos[0] <= 0.35:
+            if pos[0] - next_pos[0] <= 0.25:
                 return True
 
         elif self.orientation == -90:
-            if pos[1] - next_pos[1] <= 0.35:
+            if pos[1] - next_pos[1] <= 0.25:
                 return True
 
         elif self.orientation == 90:
-            if next_pos[1] - pos[1] <= 0.35:
+            if next_pos[1] - pos[1] <= 0.25:
                 return True
 
         else:
@@ -613,6 +636,76 @@ class MyRob(CRobLinkAngs):
 
         return ways
 
+    def correct_gps_walls_position(self, cell):
+        x, y = cell[0], cell[1]
+        walls = self.check_walls()
+
+        center_id = 0
+        left_id = 1
+        right_id = 2
+        back_id = 3
+
+        front_sensor = self.measures.irSensor[center_id]
+        left_sensor = self.measures.irSensor[left_id]
+        right_sensor = self.measures.irSensor[right_id]
+        back_sensor = self.measures.irSensor[back_id]
+
+        print("front sensor: ", front_sensor)
+
+        if self.orientation == 0:  # direita
+            if walls[0] == 1:
+                wall_position = (x + 1, y)
+                self.my_x = wall_position[0] - self.dist_from_sensor(front_sensor) - 0.5
+
+            # if walls[1] == 1:
+            #     wall_position = (x, y + 1)
+            #     self.my_y = wall_position[1] - self.dist_from_sensor(left_sensor)
+
+            # if walls[2] == 1:
+            #     wall_position = (x, y - 1)
+            #     self.my_y = wall_position[1] - self.dist_from_sensor(right_sensor)
+
+        elif self.orientation == 90:  # cima
+            if walls[0] == 1:
+                wall_position = (x, y + 1)
+                self.my_y = wall_position[1] - self.dist_from_sensor(front_sensor) - 0.5
+
+            # if walls[1] == 1:
+            #     wall_position = (x - 1, y)
+            #     self.my_x = wall_position[0] - self.dist_from_sensor(left_sensor)
+
+            # if walls[2] == 1:
+            #     wall_position = (x + 1, y)
+            #     self.my_x = wall_position[0] - self.dist_from_sensor(right_sensor)
+
+        elif self.orientation == -90:  # baixo
+            if walls[0] == 1:
+                wall_position = (x, y - 1)
+                self.my_y = wall_position[1] + self.dist_from_sensor(front_sensor) + 0.5
+
+            # if walls[1] == 1:
+            #     wall_position = (x + 1, y)
+            #     self.my_x = wall_position[0] + self.dist_from_sensor(left_sensor)
+
+            # if walls[2] == 1:
+            #     wall_position = (x - 1, y)
+            #     self.my_x = wall_position[0] + self.dist_from_sensor(right_sensor)
+
+        elif self.orientation == 180:  # esquerda
+            if walls[0] == 1:
+                wall_position = (x - 1, y)
+                self.my_x = wall_position[0] + self.dist_from_sensor(front_sensor) + 0.5
+
+            # if walls[1] == 1:
+            #     wall_position = (x, y - 1)
+            #     self.my_y = wall_position[1] + self.dist_from_sensor(left_sensor)
+
+            # if walls[2] == 1:
+            #     wall_position = (x, y + 1)
+            #     self.my_y = wall_position[1] + self.dist_from_sensor(right_sensor)
+
+        self.my_pos = round(self.my_x, 2), round(self.my_y, 2)
+
     def check_walls(self):
         center_id = 0
         left_id = 1
@@ -623,6 +716,10 @@ class MyRob(CRobLinkAngs):
         left_sensor = self.measures.irSensor[left_id]
         right_sensor = self.measures.irSensor[right_id]
         back_sensor = self.measures.irSensor[back_id]
+
+        # print("front: ", front_sensor)
+        # print("left: ", left_sensor)
+        # print("right: ", right_sensor)
 
         # frente, esquerda, direita, trás
         # 0 - livre
@@ -649,11 +746,7 @@ class MyRob(CRobLinkAngs):
         r_power = lin - (rot / 2)
         l_power = lin + (rot / 2)
 
-        self.prev_out_l = self.in_power_l
-        self.prev_out_r = self.in_power_r
-
-        self.in_power_l = l_power
-        self.in_power_r = r_power
+        self.update_prev_in_power(l_power, r_power)
 
         # print(f'motors({l_power}, {r_power})')
         self.driveMotors(l_power, r_power)
@@ -666,6 +759,9 @@ class MyRob(CRobLinkAngs):
 
         elif direction == "right":
             self.driveMotors(power, -power)
+
+    def dist_from_sensor(self, sensor_value):
+        return 1 / sensor_value
 
     def writePath(self, path, order):
         file = open("path-c3.out", 'w')
