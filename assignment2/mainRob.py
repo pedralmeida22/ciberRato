@@ -21,6 +21,8 @@ class MyRob(CRobLinkAngs):
     prev_out_r = 0   # ultima potencia aplicada na roda direita
     in_power_l = 0   # potencia a aplicar na roda esquerda
     in_power_r = 0   # potencia a aplicar na roda direita
+    prev_in_r = 0
+    prev_in_l = 0
     target = ()  # posicao target
     orientation = None  # orientacao desde a ultima rotacao
     next_orientation = None  # orientacao objetivo
@@ -275,8 +277,8 @@ class MyRob(CRobLinkAngs):
             self.gps()
 
     def update_prev_in_power(self, l_power, r_power):
-        self.prev_out_l = self.in_power_l
-        self.prev_out_r = self.in_power_r
+        self.prev_in_l = self.in_power_l
+        self.prev_in_r = self.in_power_r
         self.in_power_l = l_power
         self.in_power_r = r_power
 
@@ -286,9 +288,12 @@ class MyRob(CRobLinkAngs):
     def gps(self):
         out_l = self.movement(self.prev_out_l, self.in_power_l)
         out_r = self.movement(self.prev_out_r, self.in_power_r)
+
+        self.prev_out_l = out_l
+        self.prev_out_r = out_r
         
         # translation
-        if self.prev_out_l == 0 and self.prev_out_r == 0:
+        if self.prev_in_l == 0 and self.prev_in_r == 0:
             lin = ((out_l + out_r) / 2) / 2
         else:
             lin = (out_l + out_r) / 2
