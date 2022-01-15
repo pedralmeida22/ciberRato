@@ -89,7 +89,7 @@ class MyRob(CRobLinkAngs):
                 self.go()
 
                 # verificar se ja chegou à posicao objetivo
-                if self.has_reached_target(self.my_pos, self.target) or self.measures.irSensor[0] > 3:
+                if self.has_reached_target(self.my_pos, self.target) or self.measures.irSensor[0] > 2.5:
                     print("\n\n Cheguei ao target")
                     print(f"target: ({self.target[0]},{self.target[1]})")
                     print("front:", self.measures.irSensor[0])
@@ -274,11 +274,11 @@ class MyRob(CRobLinkAngs):
         left_sensor = self.measures.irSensor[1]
         right_sensor = self.measures.irSensor[2]
 
-        if left_sensor > 3.2:
+        if left_sensor > 3.1:
             self.update_in_power(0.15, 0.135)
             self.driveMotors(0.15, 0.135)
         
-        elif right_sensor > 3.2:
+        elif right_sensor > 3.1:
             self.update_in_power(0.135, 0.15)
             self.driveMotors(0.135, 0.15)
         
@@ -321,10 +321,6 @@ class MyRob(CRobLinkAngs):
         self.my_y = self.my_y + lin * sin(radians(self.direction()))
 
         self.my_pos = round(self.my_x, 1), round(self.my_y, 1)
-
-        # rotation
-        # rot = out_r - out_l
-        # angle = prev_angle + rot
 
     def correct_gps(self, cell):
         x, y = cell[0], cell[1]
@@ -458,20 +454,21 @@ class MyRob(CRobLinkAngs):
         self.path = astar(self.last_target, (0, 0), self.visited_positions, list(self.paredes.keys()))
 
     def has_reached_target(self, pos, next_pos):
+        dist_to_goal = 0.25
         if self.orientation == 0:
-            if next_pos[0] - pos[0] <= 0.3:
+            if next_pos[0] - pos[0] <= dist_to_goal:
                 return True
 
         elif self.orientation == 180:
-            if pos[0] - next_pos[0] <= 0.3:
+            if pos[0] - next_pos[0] <= dist_to_goal:
                 return True
 
         elif self.orientation == -90:
-            if pos[1] - next_pos[1] <= 0.3:
+            if pos[1] - next_pos[1] <= dist_to_goal:
                 return True
 
         elif self.orientation == 90:
-            if next_pos[1] - pos[1] <= 0.3:
+            if next_pos[1] - pos[1] <= dist_to_goal:
                 return True
 
         else:
