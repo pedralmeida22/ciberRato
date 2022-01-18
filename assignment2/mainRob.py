@@ -105,6 +105,7 @@ class MyRob(CRobLinkAngs):
                 # print("compass: " + str(self.measures.compass))
                 self.update_in_power(0, 0)
 
+                # nao tem orientacao objetivo, calcula
                 if self.next_orientation is None:
                     # somar 90 graus
                     # special case -> 180 + 90 = 270 mas tem de ser -90
@@ -116,24 +117,25 @@ class MyRob(CRobLinkAngs):
 
                     # print("orientation target -> " + str(self.next_orientation))
 
-                else: # tem orientacao objetivo, roda
-                    if abs(self.measures.compass - self.next_orientation) <= 30:
-                        self.rotate("left", 1)
+                #else: # tem orientacao objetivo, roda
+                if abs(self.measures.compass - self.next_orientation) <= 30:
+                    self.rotate("left", 1)
 
-                    else:
-                        self.rotate("left", 150)
+                else:
+                    self.rotate("left", 150)
 
-                    # verificar se ja rodou o pretendido
-                    if self.next_orientation == self.direction():
-                        state = "mapping"
-                        self.next_orientation = None
-                        self.orientation = self.direction()
+                # verificar se ja rodou o pretendido
+                if self.next_orientation == self.direction():
+                    state = "mapping"
+                    self.next_orientation = None
+                    self.orientation = self.direction()
 
             elif state == 'rotate_right':
                 # print("\norientation: " + str(self.orientation))
                 # print("compass: " + str(self.measures.compass))
                 self.update_in_power(0, 0)
 
+                # nao tem orientacao objetivo, calcula
                 if self.next_orientation is None:
                     # subtrair 90 graus
                     # special case -> -90 - 90 = -180, self.directions() retorna sempre +180
@@ -145,33 +147,34 @@ class MyRob(CRobLinkAngs):
 
                     # print("orientation target -> " + str(self.next_orientation))
 
-                else:   # tem orientacao objetivo, roda
-                    # caso especial para ver se esta perto da orientacao objetivo
-                    if self.next_orientation == 180:
-                        if abs(self.next_orientation + self.measures.compass) <= 30:
-                            self.rotate("right", 1)
-
-                        else:
-                            self.rotate("right", 150)
+                #else:   # tem orientacao objetivo, roda
+                # caso especial para ver se esta perto da orientacao objetivo
+                if self.next_orientation == 180:
+                    if abs(self.next_orientation + self.measures.compass) <= 30:
+                        self.rotate("right", 1)
 
                     else:
-                        if abs(self.next_orientation - self.measures.compass) <= 30:
-                            self.rotate("right", 1)
+                        self.rotate("right", 150)
 
-                        else:
-                            self.rotate("right", 150)
+                else:
+                    if abs(self.next_orientation - self.measures.compass) <= 30:
+                        self.rotate("right", 1)
 
-                    # verificar se ja rodou o pretendido
-                    if self.next_orientation == self.direction():
-                        state = "mapping"
-                        self.next_orientation = None
-                        self.orientation = self.direction()
+                    else:
+                        self.rotate("right", 150)
+
+                # verificar se ja rodou o pretendido
+                if self.next_orientation == self.direction():
+                    state = "mapping"
+                    self.next_orientation = None
+                    self.orientation = self.direction()
 
             elif state == 'sbinalla':
                 # print("orientation: " + str(self.orientation))
                 # print("compass: " + str(self.measures.compass))
                 self.update_in_power(0, 0)
 
+                # nao tem orientacao objetivo, calcula
                 if self.next_orientation is None:
                     if self.orientation == 90 or self.orientation == -90:
                         self.next_orientation = -self.orientation
@@ -184,18 +187,18 @@ class MyRob(CRobLinkAngs):
 
                     # print("orientation target -> " + str(self.next_orientation))
 
-                else:  # tem orientacao objetivo, roda
-                    if abs(self.measures.compass - self.next_orientation) <= 30:
-                        self.rotate("left", 1)
+                #else:  # tem orientacao objetivo, roda
+                if abs(self.measures.compass - self.next_orientation) <= 30:
+                    self.rotate("left", 1)
 
-                    else:
-                        self.rotate("left", 150)
+                else:
+                    self.rotate("left", 150)
 
-                    # verificar se ja rodou o pretendido
-                    if self.next_orientation == self.direction():
-                        state = "mapping"
-                        self.next_orientation = None
-                        self.orientation = self.direction()
+                # verificar se ja rodou o pretendido
+                if self.next_orientation == self.direction():
+                    state = "mapping"
+                    self.next_orientation = None
+                    self.orientation = self.direction()
 
             elif state == "mapping":
                 print("\n---MAPPING---")
@@ -211,10 +214,6 @@ class MyRob(CRobLinkAngs):
                 print(f"Position -> ({self.pos[0]},{self.pos[1]})")
                 print("aMy position: ", self.my_pos)
 
-                self.clean_not_taken()
-                # verificar ground sensor
-                self.save_spots()
-
                 # tem target, vai só
                 if self.target != ():
                     print("tem target vai só")
@@ -229,6 +228,10 @@ class MyRob(CRobLinkAngs):
                     # nao tem target nem path, calcula target
                     else:
                         print("no target, no path")
+                        
+                        self.clean_not_taken()
+                        # verificar ground sensor
+                        self.save_spots()
 
                         # calcular target
                         if self.last_target in self.not_taken_positions.keys():
