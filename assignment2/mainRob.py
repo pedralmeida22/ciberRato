@@ -214,6 +214,8 @@ class MyRob(CRobLinkAngs):
                 print(f"Position -> ({self.pos[0]},{self.pos[1]})")
                 print("aMy position: ", self.my_pos)
 
+                self.clean_not_taken()
+
                 # tem target, vai só
                 if self.target != ():
                     print("tem target vai só")
@@ -228,8 +230,6 @@ class MyRob(CRobLinkAngs):
                     # nao tem target nem path, calcula target
                     else:
                         print("no target, no path")
-                        
-                        self.clean_not_taken()
                         # verificar ground sensor
                         self.save_spots()
 
@@ -295,8 +295,8 @@ class MyRob(CRobLinkAngs):
                 self.forwards(0.15, 0.01, self.measures.compass, self.orientation)
 
     def update_in_power(self, l_power, r_power):
-        # self.prev_in_l = self.in_power_l
-        # self.prev_in_r = self.in_power_r
+        self.prev_in_l = self.in_power_l
+        self.prev_in_r = self.in_power_r
         self.in_power_l = l_power
         self.in_power_r = r_power
 
@@ -304,18 +304,16 @@ class MyRob(CRobLinkAngs):
         return (in_power + previous_out) / 2
 
     def gps(self):
-        # out_l = self.movement(self.prev_in_l, self.in_power_l)
-        # out_r = self.movement(self.prev_in_r, self.in_power_r)
         out_l = self.movement(self.prev_out_l, self.in_power_l)
         out_r = self.movement(self.prev_out_r, self.in_power_r)
         
         # translation
-        # if self.prev_in_l == 0 and self.prev_in_r == 0:
-        #     lin = ((out_l + out_r) / 2) / 2
-        # else:
-        #     lin = (out_l + out_r) / 2
+        if self.prev_in_l == 0 and self.prev_in_r == 0:
+            lin = ((out_l + out_r) / 2) / 2
+        else:
+            lin = (out_l + out_r) / 2
         
-        lin = (out_l + out_r) / 2
+        # lin = (out_l + out_r) / 2
 
         self.prev_out_l = out_l
         self.prev_out_r = out_r
@@ -457,7 +455,7 @@ class MyRob(CRobLinkAngs):
         self.path = astar(self.last_target, (0, 0), self.visited_positions, list(self.paredes.keys()))
 
     def has_reached_target(self, pos, next_pos):
-        dist_to_goal = 0.25
+        dist_to_goal = 0.35
         if self.orientation == 0:
             if next_pos[0] - pos[0] <= dist_to_goal:
                 return True
