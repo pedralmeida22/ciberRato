@@ -232,6 +232,9 @@ class MyRob(CRobLinkAngs):
                         print("no target, no path")
                         # verificar ground sensor
                         self.save_spots()
+                        
+                        print("write map")
+                        self.writeMap()
 
                         # calcular target
                         if self.last_target in self.not_taken_positions.keys():
@@ -247,16 +250,24 @@ class MyRob(CRobLinkAngs):
                             if self.not_taken_positions == {} and self.returning == False:
                                 print("Mapa feito..")
                                 self.returning = True
-                                paths = self.get_paths_between_spots()
-                                shortest_path, order = self.calc_shortest_path(paths)
-                                self.writePath(shortest_path, order)
-                                self.writeMap(order)
-                                self.take_me_home()
+                                if len(self.spots.keys()) == 1:
+                                    shortest_path = [self.spots[0]]
+                                else:
+                                    paths = self.get_paths_between_spots()
+                                    shortest_path, order = self.calc_shortest_path(paths)
+                                print("path: ", str(shortest_path))
+                                self.writePath(shortest_path)
+                                self.writeMap()
+
+                                if self.last_target == (0, 0):
+                                    self.end()
+                                    return
+                                else:
+                                    self.take_me_home()
 
                             elif self.returning and self.last_target == (0, 0):
-                                self.finish()
-                                print("\n\nTime: ", self.measures.time)
-                                return                                
+                                self.end()     
+                                return                           
 
                             else:
                                 self.calc_nearest_not_visited()
@@ -272,6 +283,10 @@ class MyRob(CRobLinkAngs):
                 self.last_state = state
             
             self.gps()
+
+    def end(self):
+        self.finish()
+        print("\n\nTime: ", self.measures.time)
 
     def go(self):
         left_sensor = self.measures.irSensor[1]
@@ -394,7 +409,6 @@ class MyRob(CRobLinkAngs):
         self.my_pos = round(self.my_x, 1), round(self.my_y, 1)
         
     def get_paths_between_spots(self):
-        print("\nSpots: ", self.spots)
         number_of_spots = len(self.spots.keys())
         paths = dict()
 
@@ -438,6 +452,7 @@ class MyRob(CRobLinkAngs):
         nearest = 99
         goal = None
         min_path = None
+        # print("not taken: ", str(self.not_taken_positions.keys()))
         for position in self.not_taken_positions.keys():
             path = astar(self.last_target, position, self.visited_positions, list(self.paredes.keys()))
 
@@ -691,8 +706,8 @@ class MyRob(CRobLinkAngs):
                 self.mapa[behind] = "X"
                 self.paredes.pop((x - 1, y), None)
             else:
-                self.mapa[behind] = "-"
-                self.paredes[(x - 1, y)] = "-"
+                self.mapa[behind] = "|"
+                self.paredes[(x - 1, y)] = "|"
 
         elif self.orientation == 90:  # cima
             front = (28 + x, 14 - (y + 1))
@@ -814,8 +829,8 @@ class MyRob(CRobLinkAngs):
                 self.mapa[behind] = "X"
                 self.paredes.pop((x + 1, y), None)
             else:
-                self.mapa[behind] = "-"
-                self.paredes[(x + 1, y)] = "-"
+                self.mapa[behind] = "|"
+                self.paredes[(x + 1, y)] = "|"
 
         return ways
 
@@ -876,7 +891,7 @@ class MyRob(CRobLinkAngs):
     def dist_from_sensor(self, sensor_value):
         return (1 / sensor_value)
 
-    def writePath(self, path, order):
+    def writePath(self, path):
         file = open("path.out", 'w')
 
         for i in range(len(path)):
@@ -895,15 +910,17 @@ class MyRob(CRobLinkAngs):
             else:
                 file.write(str(path[i][0]) + " " + str(path[i][1]))
             
-            file.write('\n')
+            if i != len(path) - 1:
+                file.write('\n')
+
         file.close()
     
-    def writeMap(self, spots_order):
+    def writeMap(self, spots_order=[]):
         file = open("map.out", 'w')
         lista = list(self.mapa.keys())
 
         # posicao inicial
-        self.mapa[(28, 14)] = "I"
+        # self.mapa[(28, 14)] = "I"
 
         # spots
         for key, value in self.spots.items():
