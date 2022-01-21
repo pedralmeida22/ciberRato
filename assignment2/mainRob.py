@@ -89,7 +89,7 @@ class MyRob(CRobLinkAngs):
                 self.go()
 
                 # verificar se ja chegou à posicao objetivo
-                if self.has_reached_target(self.my_pos, self.target) or self.measures.irSensor[0] > 2.5:
+                if self.has_reached_target(self.my_pos, self.target) or self.measures.irSensor[0] > 2.3:
                     print("\n\n Cheguei ao target")
                     print(f"target: ({self.target[0]},{self.target[1]})")
                     print("front:", self.measures.irSensor[0])
@@ -452,7 +452,7 @@ class MyRob(CRobLinkAngs):
         nearest = 99
         goal = None
         min_path = None
-        # print("not taken: ", str(self.not_taken_positions.keys()))
+        print("not taken: ", str(self.not_taken_positions.keys()))
         for position in self.not_taken_positions.keys():
             path = astar(self.last_target, position, self.visited_positions, list(self.paredes.keys()))
 
@@ -863,7 +863,7 @@ class MyRob(CRobLinkAngs):
         if right_sensor >= 1.2:
             walls[2] = 1
 
-        if back_sensor >= 1:
+        if back_sensor >= 1.2:
             walls[3] = 1
 
         return walls
