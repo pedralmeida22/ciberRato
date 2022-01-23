@@ -255,7 +255,7 @@ class MyRob(CRobLinkAngs):
                                 else:
                                     paths = self.get_paths_between_spots()
                                     shortest_path, order = self.calc_shortest_path(paths)
-                                print("path: ", str(shortest_path))
+                                # print("path: ", str(shortest_path))
                                 self.writePath(shortest_path)
                                 self.writeMap()
 
@@ -411,6 +411,8 @@ class MyRob(CRobLinkAngs):
     def get_paths_between_spots(self):
         number_of_spots = len(self.spots.keys())
         paths = dict()
+
+        print("\nspots: ", str(self.spots))
 
         for i in range(number_of_spots - 1):
             for j in range(i + 1, number_of_spots):
